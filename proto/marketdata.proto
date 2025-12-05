@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package marketdata;
+
+option go_package = "github.com/CodingLuisNg/FakeTradingMarket/proto/marketdata";
+
+// Market update message containing top of book and last trade
+message MarketUpdate {
+  string symbol = 1;
+  double last_price = 2;
+  double volume = 3;
+  
+  // Top level bid and ask
+  double best_bid_price = 4;
+  double best_bid_qty = 5;
+  double best_ask_price = 6;
+  double best_ask_qty = 7;
+
+  repeated OrderBookEntry bids = 8;
+  repeated OrderBookEntry asks = 9;
+}
+
+// Request to subscribe to market data
+message SubscribeRequest {
+  string symbol = 1;
+}
+
+// Empty response for subscription (stream will follow)
+message SubscribeResponse {}
+
+// Service for bots to subscribe to market data from Backend
+service MarketDataService {
+    rpc Subscribe(SubscribeRequest) returns (stream MarketUpdate);
+    rpc GetOrderBook(GetOrderBookRequest) returns (OrderBookSnapshot);
+}
+
+message GetOrderBookRequest {
+    string symbol = 1;
+}
+
+message OrderBookEntry {
+    double price = 1;
+    double quantity = 2;
+}
+
+message OrderBookSnapshot {
+    string symbol = 1;
+    repeated OrderBookEntry bids = 2;
+    repeated OrderBookEntry asks = 3;
+    int64 timestamp = 4;
+}

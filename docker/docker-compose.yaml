@@ -1,0 +1,123 @@
+services:
+  # Matching Engine - C++ service that handles order matching
+  matching-engine:
+    build:
+      context: ..
+      dockerfile: docker/matching_engine.Dockerfile
+    container_name: matching-engine
+    ports:
+      - "50052:50052"
+    networks:
+      - trading-network
+    restart: unless-stopped
+
+  # Backend Gateway - Go service that provides HTTP API and gRPC proxy
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/gateway.Dockerfile
+    container_name: backend-gateway
+    ports:
+      - "8080:8080"   # HTTP API
+      - "50051:50051" # gRPC for bots
+    networks:
+      - trading-network
+    depends_on:
+      - matching-engine
+    environment:
+      - MATCHING_ENGINE_ADDR=matching-engine:50052
+    command: ["./backend_go", "-matching_engine=matching-engine:50052", "-port=8080", "-grpc_port=50051"]
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Trading Bot 1 - Random Trader Bot
+  bot1:
+    build:
+      context: ..
+      dockerfile: docker/bots.Dockerfile
+    container_name: trading-bot-1-random
+    networks:
+      - trading-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - BOT_ID=1
+      - BOT_TYPE=random
+      - BACKEND_ADDR=backend:50051
+    restart: unless-stopped
+
+  # Trading Bot 2 - Market Maker Bot
+  bot2:
+    build:
+      context: ..
+      dockerfile: docker/bots.Dockerfile
+    container_name: trading-bot-2-mm
+    networks:
+      - trading-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - BOT_ID=2
+      - BOT_TYPE=mm
+      - BACKEND_ADDR=backend:50051
+    restart: unless-stopped
+
+  # Trading Bot 3 - Trend/Momentum Bot
+  bot3:
+    build:
+      context: ..
+      dockerfile: docker/bots.Dockerfile
+    container_name: trading-bot-3-trend
+    networks:
+      - trading-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - BOT_ID=3
+      - BOT_TYPE=momentum
+      - BACKEND_ADDR=backend:50051
+    restart: unless-stopped
+
+  # Trading Bot 4 - Trend/Momentum Bot
+  bot4:
+    build:
+      context: ..
+      dockerfile: docker/bots.Dockerfile
+    container_name: trading-bot-4-trend
+    networks:
+      - trading-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - BOT_ID=4
+      - BOT_TYPE=momentum
+      - BACKEND_ADDR=backend:50051
+    restart: unless-stopped
+
+
+  # Frontend - React application with Nginx
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend.Dockerfile
+    container_name: frontend-react
+    ports:
+      - "3000:80"
+    networks:
+      - trading-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+networks:
+  trading-network:
+    driver: bridge
+

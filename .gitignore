@@ -1,0 +1,59 @@
+# ===== IDE =====
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== C++ Build Artifacts =====
+services/matching_engine_cpp/build/
+services/matching_engine_cpp/cmake-build-debug/
+services/matching_engine_cpp/cmake-build-release/
+*.o
+*.a
+*.so
+*.dylib
+
+# ===== Go Build Artifacts =====
+services/backend_go/gateway
+services/backend_go/proto/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+services/bots_python/generated/
+.venv/
+venv/
+ENV/
+
+# ===== Node.js / React =====
+services/frontend_react/node_modules/
+services/frontend_react/dist/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ===== Logs =====
+logs/
+*.log
+
+# ===== Local dev files =====
+.local_pids
+.env
+.env.local
+.env.*.local
+
+# ===== Misc =====
+structure.txt
+*.tmp
+*.temp
+

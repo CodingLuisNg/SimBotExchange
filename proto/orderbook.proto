@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package orderbook;
+
+option go_package = "github.com/CodingLuisNg/FakeTradingMarket/proto/orderbook";
+
+// Order side (Buy or Sell)
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  SIDE_BUY = 1;
+  SIDE_SELL = 2;
+}
+
+// Order message
+message Order {
+  string order_id = 1;
+  string symbol = 2;
+  Side side = 3;
+  double price = 4;
+  double quantity = 5;
+}
+
+// Request to add an order
+message AddOrderRequest {
+  Order order = 1;
+}
+
+// Response for adding an order
+message AddOrderResponse {
+  bool success = 1;
+  string message = 2;
+  string order_id = 3;
+}
+
+// Service definition for the Matching Engine
+service MatchingEngine {
+  // Add an order to the order book
+  rpc AddOrder(AddOrderRequest) returns (AddOrderResponse);
+  
+  // Subscribe to order updates (fills)
+  rpc SubscribeOrders(SubscribeOrdersRequest) returns (stream OrderUpdate);
+}
+
+message SubscribeOrdersRequest {}
+
+message OrderUpdate {
+  string order_id = 1;
+  string symbol = 2;
+  double price = 3;
+  double quantity = 4; // Filled quantity
+  string status = 5; // "FILLED", "PARTIALLY_FILLED"
+  int64 timestamp = 6;
+}
