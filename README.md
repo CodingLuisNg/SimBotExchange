@@ -11,8 +11,8 @@ A real-time stock market simulator with a matching engine, trading bots, and a w
 git clone https://github.com/codingluisng/simbot-exchange.git
 cd simbot-exchange
 
-# Start everything with one command
-./start_docker.sh
+# Start everything with 1 line of command
+chmod +x start_docker.sh && ./start_docker.sh
 ```
 
 That's it! Open **http://localhost:3000** in your browser to start trading.
