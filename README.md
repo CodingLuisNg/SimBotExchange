@@ -2,6 +2,8 @@
 
 A real-time stock market simulator with a matching engine, trading bots, and a web-based trading interface.
 
+![Screenshot1.png](Screenshot1.png)
+
 ## 🚀 Quick Start (Docker)
 
 **Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
@@ -27,6 +29,8 @@ That's it! Open **http://localhost:3000** in your browser to start trading.
 | **Bot 1** | Random Trader | - |
 | **Bot 2** | Market Maker | - |
 | **Bots 3-4** | Trend Creators | - |
+
+![Screenshot2.png](Screenshot2.png)
 
 ## 🎮 How to Play
 
