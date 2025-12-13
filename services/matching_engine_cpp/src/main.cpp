@@ -10,6 +10,8 @@
 #include <condition_variable>
 #include <optional>
 #include <ctime>
+#include <cmath>
+#include <cstdint>
 
 #include <grpcpp/grpcpp.h>
 
@@ -32,39 +34,78 @@ using marketdata::MarketDataService;
 using marketdata::SubscribeRequest;
 using marketdata::MarketUpdate;
 
+// Fixed-point decimal price representation (4 decimal places)
+// 1.0000 dollar = 10000 ticks
+class Price {
+public:
+    static constexpr int64_t SCALE = 10000;  // 4 decimal places
+
+    Price() : ticks_(0) {}
+    explicit Price(int64_t ticks) : ticks_(ticks) {}
+    explicit Price(double value) : ticks_(static_cast<int64_t>(std::round(value * SCALE))) {}
+
+    static Price fromDouble(double value) {
+        return Price(value);
+    }
+
+    double toDouble() const {
+        return static_cast<double>(ticks_) / SCALE;
+    }
+
+    int64_t ticks() const { return ticks_; }
+
+    // Comparison operators
+    bool operator<(const Price& other) const { return ticks_ < other.ticks_; }
+    bool operator<=(const Price& other) const { return ticks_ <= other.ticks_; }
+    bool operator>(const Price& other) const { return ticks_ > other.ticks_; }
+    bool operator>=(const Price& other) const { return ticks_ >= other.ticks_; }
+    bool operator==(const Price& other) const { return ticks_ == other.ticks_; }
+    bool operator!=(const Price& other) const { return ticks_ != other.ticks_; }
+
+    // Arithmetic operators
+    Price operator+(const Price& other) const { return Price(ticks_ + other.ticks_); }
+    Price operator-(const Price& other) const { return Price(ticks_ - other.ticks_); }
+
+private:
+    int64_t ticks_;
+};
+
 // Simple Order Book implementation
 struct OrderEntry {
     std::string order_id;
-    double price;
+    Price price;
     double quantity;
     Side side;
 };
 
 class OrderBook {
 public:
-    static constexpr double MIN_PRICE = 1.0;  // Price floor - stock can't go below $1
+    static const Price MIN_PRICE;  // Price floor - stock can't go below $1
 
     void AddOrder(const Order& order) {
         std::lock_guard<std::mutex> lock(mu_);
 
+        Price price = Price::fromDouble(order.price());
+
         // Reject orders with invalid price
-        if (order.price() < MIN_PRICE) {
-            std::cout << "❌ Rejected order: price $" << order.price() << " below minimum $" << MIN_PRICE << std::endl;
+        if (price < MIN_PRICE) {
+            std::cout << "❌ Rejected order: price $" << std::fixed << std::setprecision(2)
+                      << price.toDouble() << " below minimum $" << MIN_PRICE.toDouble() << std::endl;
             return;
         }
 
         std::string side_str = (order.side() == Side::SIDE_BUY) ? "BUY" : "SELL";
         std::cout << "📥 " << side_str << " " << static_cast<int>(order.quantity())
-                  << " @ $" << std::fixed << std::setprecision(2) << order.price()
+                  << " @ $" << std::fixed << std::setprecision(2) << price.toDouble()
                   << " [" << order.order_id() << "]" << std::endl;
 
         if (order.side() == Side::SIDE_BUY) {
-            bids_.push_back({order.order_id(), order.price(), order.quantity(), order.side()});
+            bids_.push_back({order.order_id(), price, order.quantity(), order.side()});
             std::sort(bids_.begin(), bids_.end(), [](const OrderEntry& a, const OrderEntry& b) {
                 return a.price > b.price; // Descending for bids
             });
         } else {
-            asks_.push_back({order.order_id(), order.price(), order.quantity(), order.side()});
+            asks_.push_back({order.order_id(), price, order.quantity(), order.side()});
             std::sort(asks_.begin(), asks_.end(), [](const OrderEntry& a, const OrderEntry& b) {
                 return a.price < b.price; // Ascending for asks
             });
@@ -77,11 +118,11 @@ public:
         std::lock_guard<std::mutex> lock(mu_);
         MarketUpdate update;
         update.set_symbol("TE");
-        update.set_last_price(last_traded_price_);
+        update.set_last_price(last_traded_price_.toDouble());
         update.set_volume(total_volume_);
         
         if (!bids_.empty()) {
-            update.set_best_bid_price(bids_.front().price);
+            update.set_best_bid_price(bids_.front().price.toDouble());
             update.set_best_bid_qty(bids_.front().quantity);
             
             // Add top 5 bids
@@ -89,12 +130,12 @@ public:
             for (const auto& bid : bids_) {
                 if (count++ >= 5) break;
                 auto* entry = update.add_bids();
-                entry->set_price(bid.price);
+                entry->set_price(bid.price.toDouble());
                 entry->set_quantity(bid.quantity);
             }
         }
         if (!asks_.empty()) {
-            update.set_best_ask_price(asks_.front().price);
+            update.set_best_ask_price(asks_.front().price.toDouble());
             update.set_best_ask_qty(asks_.front().quantity);
 
             // Add top 5 asks
@@ -102,7 +143,7 @@ public:
             for (const auto& ask : asks_) {
                 if (count++ >= 5) break;
                 auto* entry = update.add_asks();
-                entry->set_price(ask.price);
+                entry->set_price(ask.price.toDouble());
                 entry->set_quantity(ask.quantity);
             }
         }
@@ -117,12 +158,12 @@ public:
 
         for (const auto& bid : bids_) {
             auto* entry = snapshot.add_bids();
-            entry->set_price(bid.price);
+            entry->set_price(bid.price.toDouble());
             entry->set_quantity(bid.quantity);
         }
         for (const auto& ask : asks_) {
             auto* entry = snapshot.add_asks();
-            entry->set_price(ask.price);
+            entry->set_price(ask.price.toDouble());
             entry->set_quantity(ask.quantity);
         }
         return snapshot;
@@ -178,7 +219,7 @@ private:
 
             if (best_bid.price >= best_ask.price) {
                 double trade_qty = std::min(best_bid.quantity, best_ask.quantity);
-                double trade_price = best_ask.price; // Price of the resting order (ask)
+                Price trade_price = best_ask.price; // Price of the resting order (ask)
 
                 last_traded_price_ = trade_price;
                 total_volume_ += trade_qty;
@@ -187,7 +228,7 @@ private:
                 orderbook::OrderUpdate bid_update;
                 bid_update.set_order_id(best_bid.order_id);
                 bid_update.set_symbol("TE");
-                bid_update.set_price(trade_price);
+                bid_update.set_price(trade_price.toDouble());
                 bid_update.set_quantity(trade_qty);
                 bid_update.set_status("FILLED"); // Or PARTIALLY_FILLED if we tracked original qty
                 bid_update.set_timestamp(std::time(nullptr));
@@ -195,7 +236,7 @@ private:
                 orderbook::OrderUpdate ask_update;
                 ask_update.set_order_id(best_ask.order_id);
                 ask_update.set_symbol("TE");
-                ask_update.set_price(trade_price);
+                ask_update.set_price(trade_price.toDouble());
                 ask_update.set_quantity(trade_qty);
                 ask_update.set_status("FILLED");
                 ask_update.set_timestamp(std::time(nullptr));
@@ -211,7 +252,7 @@ private:
                 if (best_ask.quantity <= 0) asks_.erase(asks_.begin());
                 
                 std::cout << "✅ Trade executed: " << static_cast<int>(trade_qty) << " shares @ $"
-                          << std::fixed << std::setprecision(2) << trade_price << std::endl;
+                          << std::fixed << std::setprecision(2) << trade_price.toDouble() << std::endl;
                 trades_executed = true;
             } else {
                 break;
@@ -221,13 +262,16 @@ private:
 
     std::vector<OrderEntry> bids_;
     std::vector<OrderEntry> asks_;
-    double last_traded_price_ = 100.0;
+    Price last_traded_price_ = Price::fromDouble(100.0);
     double total_volume_ = 0.0;
     std::mutex mu_;
     
     std::vector<std::shared_ptr<UpdateQueue>> subscribers_;
     std::mutex subs_mu_;
 };
+
+// Define MIN_PRICE constant
+const Price OrderBook::MIN_PRICE = Price::fromDouble(1.0);
 
 // Global OrderBook instance
 OrderBook g_order_book;
