@@ -50,25 +50,25 @@ function App() {
     // Process a fill notification
     const processFill = (update: OrderUpdate, trade: any) => {
         if (processedFills.current.has(update.order_id)) {
-            console.log(`⏭️ Already processed fill for ${update.order_id}`);
+            console.log(`⏭Already processed fill for ${update.order_id}`);
             return;
         }
 
-        console.log(`✅ Processing fill: ${trade.side} ${trade.quantity} @ ${trade.price} -> ${update.status}`);
+        console.log(`Processing fill: ${trade.side} ${trade.quantity} @ ${trade.price} -> ${update.status}`);
         processedFills.current.add(update.order_id);
 
         // Update holdings
         if (trade.side === 'buy') {
             setStockHoldings(h => {
                 const newHoldings = h + trade.quantity;
-                console.log(`📈 Added ${trade.quantity} shares. New total: ${newHoldings}`);
+                console.log(`Added ${trade.quantity} shares. New total: ${newHoldings}`);
                 return newHoldings;
             });
         } else {
             const cashReceived = trade.price * trade.quantity;
             setCashBalance(c => {
                 const newBalance = c + cashReceived;
-                console.log(`💰 Added $${cashReceived.toFixed(2)}. New total: $${newBalance.toFixed(2)}`);
+                console.log(`Added $${cashReceived.toFixed(2)}. New total: $${newBalance.toFixed(2)}`);
                 return newBalance;
             });
         }
@@ -103,11 +103,11 @@ function App() {
                 } else if (data.order_id) {
                     // OrderUpdate (fill notification)
                     const update = data as OrderUpdate;
-                    console.log("📢 Order Update received:", update);
+                    console.log("Order Update received:", update);
 
                     // Skip if already processed
                     if (processedFills.current.has(update.order_id)) {
-                        console.log(`⏭️ Skipping duplicate fill for ${update.order_id}`);
+                        console.log(`Skipping duplicate fill for ${update.order_id}`);
                         return;
                     }
 
@@ -118,7 +118,7 @@ function App() {
                         processFill(update, matchedTrade);
                     } else if (!matchedTrade) {
                         // Trade not created yet - store for later processing
-                        console.log(`⏳ Trade not found yet for ${update.order_id}, storing for later...`);
+                        console.log(`Trade not found yet for ${update.order_id}, storing for later...`);
                         pendingFills.current.set(update.order_id, update);
                     }
                 }
@@ -189,13 +189,13 @@ function App() {
                     timestamp: new Date().toLocaleTimeString(),
                     status: 'placed'
                 };
-                console.log("📝 Created new trade:", newTrade);
+                console.log("Created new trade:", newTrade);
                 setTrades(prev => [newTrade, ...prev]);
 
                 // Check if there's a pending fill for this order (arrived before HTTP response)
                 const pendingFill = pendingFills.current.get(result.order_id);
                 if (pendingFill) {
-                    console.log(`🔄 Found pending fill for ${result.order_id}, processing now...`);
+                    console.log(`Found pending fill for ${result.order_id}, processing now...`);
                     pendingFills.current.delete(result.order_id);
                     // Process the fill after a small delay to ensure trade is in state
                     setTimeout(() => {

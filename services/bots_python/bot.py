@@ -224,8 +224,7 @@ class MomentumBot(TradingBot):
         self.trend_strength = choice[1]
         self.trend_duration = random.randint(choice[2], choice[2] * 2)
 
-        emoji = {"strong_bull": "🚀", "bull": "📈", "neutral": "➡️", "bear": "📉", "strong_bear": "💥"}.get(self.trend, "")
-        print(f"[TREND] Bot {self.bot_id}: {emoji} New trend: {self.trend.upper()} for ~{self.trend_duration} trades")
+        print(f"[TREND] Bot {self.bot_id}: New trend: {self.trend.upper()} for ~{self.trend_duration} trades")
 
     def trade(self):
         # Check if we need a new trend

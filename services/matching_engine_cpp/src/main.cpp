@@ -89,7 +89,7 @@ public:
 
         // Reject orders with invalid price
         if (price < MIN_PRICE) {
-            std::cout << "❌ Rejected order: price $" << std::fixed << std::setprecision(2)
+            std::cout << "Rejected order: price $" << std::fixed << std::setprecision(2)
                       << price.toDouble() << " below minimum $" << MIN_PRICE.toDouble() << std::endl;
             return;
         }
@@ -241,7 +241,7 @@ private:
                 ask_update.set_status("FILLED");
                 ask_update.set_timestamp(std::time(nullptr));
 
-                // Broadcast BEFORE modifying state (or after? doesn't matter much for now)
+                // Broadcast BEFORE modifying state
                 BroadcastUpdate(bid_update);
                 BroadcastUpdate(ask_update);
 
@@ -251,7 +251,7 @@ private:
                 if (best_bid.quantity <= 0) bids_.erase(bids_.begin());
                 if (best_ask.quantity <= 0) asks_.erase(asks_.begin());
                 
-                std::cout << "✅ Trade executed: " << static_cast<int>(trade_qty) << " shares @ $"
+                std::cout << "Trade executed: " << static_cast<int>(trade_qty) << " shares @ $"
                           << std::fixed << std::setprecision(2) << trade_price.toDouble() << std::endl;
                 trades_executed = true;
             } else {
@@ -310,9 +310,7 @@ class MatchingEngineImpl final : public MatchingEngine::Service {
             if (update) {
                 writer->Write(*update);
             } else {
-                // Queue closed or empty (should block in Pop usually, but here we might need a better queue)
-                // For simplicity, let's assume Pop blocks or we sleep.
-                // Our simple queue below will block.
+                // Queue closed or empty
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }

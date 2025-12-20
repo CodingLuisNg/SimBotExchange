@@ -188,12 +188,6 @@ func main() {
 	}
 	defer conn.Close()
 	matcherClient := orderbook.NewMatchingEngineClient(conn)
-	// Assume Matching Engine also implements MarketDataService for us to subscribe
-	// But wait, in C++ we need to implement it.
-	// For now, let's assume we just forward orders.
-	// And we need a way to receive updates.
-	// If Matching Engine implements MarketDataService, we can subscribe.
-	// Let's assume it does.
 	marketDataClient := marketdata.NewMarketDataServiceClient(conn)
 
 	srv := newServer()
@@ -229,7 +223,7 @@ func main() {
 				time.Sleep(2 * time.Second)
 				continue
 			}
-			log.Println("✅ Connected to Matching Engine Orders stream")
+			log.Println("Connected to Matching Engine Orders stream")
 			for {
 				update, err := stream.Recv()
 				if err != nil {
@@ -250,13 +244,8 @@ func main() {
 	}
 	grpcServer := grpc.NewServer()
 	marketdata.RegisterMarketDataServiceServer(grpcServer, srv)
-	// We also need to expose AddOrder for Bots via gRPC?
-	// The plan says "Bots ... Connects to the Backend via gRPC ... Sends market-making or random orders".
-	// So Backend needs to implement MatchingEngine service (or a proxy service) for Bots?
-	// Or Bots use the same MatchingEngine service definition but connect to Backend?
-	// Yes, Backend should implement MatchingEngine service and forward to real Matching Engine.
 
-	// Let's implement AddOrder proxy
+	//AddOrder proxy
 	proxy := &orderProxy{client: matcherClient}
 	orderbook.RegisterMatchingEngineServer(grpcServer, proxy)
 
@@ -283,10 +272,7 @@ func main() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		// We expect JSON body matching the proto
-		// But proto JSON mapping might be tricky with standard lib.
-		// Let's decode manually or use json.
-		// For simplicity, let's just use a struct that matches.
+
 		type OrderJSON struct {
 			Symbol   string  `json:"symbol"`
 			Side     string  `json:"side"` // "buy" or "sell"
@@ -314,7 +300,7 @@ func main() {
 		srv.frontendOrders[orderID] = true
 		srv.mu.Unlock()
 
-		log.Printf("📝 Frontend order placed: ID=%s Side=%s Price=%.2f Qty=%.0f", orderID, oj.Side, oj.Price, oj.Quantity)
+		log.Printf("Frontend order placed: ID=%s Side=%s Price=%.2f Qty=%.0f", orderID, oj.Side, oj.Price, oj.Quantity)
 
 		// Call Matching Engine
 		resp, err := matcherClient.AddOrder(context.Background(), &orderbook.AddOrderRequest{
@@ -366,9 +352,6 @@ func main() {
 	})
 
 	http.HandleFunc("/ws", srv.handleWebSocket)
-
-	// Add CORS middleware for /order too
-	// ... minimal implementation
 
 	log.Printf("HTTP server listening at :%d", *port)
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
