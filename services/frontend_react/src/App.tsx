@@ -37,10 +37,19 @@ function App() {
     const [trades, setTrades] = useState<any[]>([]);
     const [cashBalance, setCashBalance] = useState<number>(1000);
     const [stockHoldings, setStockHoldings] = useState<number>(0);
+    const [bootComplete, setBootComplete] = useState(false);
     const ws = useRef<WebSocket | null>(null);
     const processedFills = useRef<Set<string>>(new Set()); // Track processed order fills
     const tradesRef = useRef<any[]>([]); // Keep a ref to trades for WebSocket handler
     const pendingFills = useRef<Map<string, OrderUpdate>>(new Map()); // Store fills that arrived before trade was created
+
+    // Boot sequence animation
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setBootComplete(true);
+        }, 1500);
+        return () => clearTimeout(timer);
+    }, []);
 
     // Keep tradesRef in sync with trades state
     useEffect(() => {
@@ -223,30 +232,88 @@ function App() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 p-8">
-            <header className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900">SimBot Exchange</h1>
+        <div className="min-h-screen bg-terminal-bg p-4 md:p-8">
+            {/* Boot Sequence Overlay */}
+            {!bootComplete && (
+                <div className="fixed inset-0 bg-terminal-bg z-50 flex items-center justify-center">
+                    <div className="font-mono text-terminal-primary text-sm space-y-2">
+                        <div>[OK] Initializing trading engine...</div>
+                        <div>[OK] Loading market data streams...</div>
+                        <div>[OK] Establishing WebSocket connection...</div>
+                        <div className="flex items-center gap-2">
+                            <span>[...]</span>
+                            <span>SIMBOT EXCHANGE</span>
+                            <span className="animate-blink">_</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Terminal Header */}
+            <header className="mb-6 ascii-border-primary p-4">
+                <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm text-terminal-muted">
+                        root@simbot:~$
+                    </div>
+                    <div className="text-sm">
+                        [{new Date().toISOString().split('T')[0]}] [{new Date().toLocaleTimeString()}]
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-2xl md:text-4xl font-bold tracking-wider">
+                        SIMBOT EXCHANGE
+                    </span>
+                    <span className="cursor-block"></span>
+                </div>
+                <div className="mt-2 text-terminal-muted text-sm">
+                    ========================================
+                </div>
+                <div className="mt-1 text-xs">
+                    <span className="text-terminal-secondary">[STATUS]</span> CONNECTED |
+                    <span className="text-terminal-secondary"> [MARKET]</span> {marketData?.symbol || 'TE'} |
+                    <span className="text-terminal-secondary"> [LATENCY]</span> &lt;10ms
+                </div>
             </header>
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
                 {/* Left Column: Chart & OrderBook */}
-                <div className="lg:col-span-3 space-y-8">
+                <div className="xl:col-span-3 space-y-4 md:space-y-6">
+                    {/* Price Chart Window */}
                     <PriceChart lastPrice={marketData?.last_price || 0} history={priceHistory} />
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                        {/* Order Book Window */}
                         <OrderBook bids={marketData?.bids || []} asks={marketData?.asks || []} />
 
-                        {/* Market Stats */}
-                        <div className="bg-white p-4 rounded shadow space-y-4">
-                            <h3 className="font-bold">Market Stats</h3>
-                            <div className="grid grid-cols-2 gap-4">
+                        {/* Market Stats Window */}
+                        <div className="ascii-border bg-terminal-bg p-4">
+                            <div className="text-sm mb-3 pb-2 border-b border-terminal-border">
+                                +--- MARKET STATS ---+
+                            </div>
+                            <div className="space-y-4">
                                 <div>
-                                    <p className="text-gray-500 text-sm">Last Price</p>
-                                    <p className="text-2xl font-bold">${marketData?.last_price.toFixed(2) || '-'}</p>
+                                    <p className="text-xs text-terminal-muted mb-1">&gt; last_price:</p>
+                                    <p className="text-3xl font-bold text-terminal-primary">
+                                        ${marketData?.last_price.toFixed(2) || '---.--'}
+                                    </p>
                                 </div>
                                 <div>
-                                    <p className="text-gray-500 text-sm">Volume</p>
-                                    <p className="text-2xl font-bold">{marketData?.volume || '-'}</p>
+                                    <p className="text-xs text-terminal-muted mb-1">&gt; volume:</p>
+                                    <p className="text-2xl font-bold">{marketData?.volume || '---'}</p>
+                                </div>
+                                <div className="pt-2 border-t border-terminal-border">
+                                    <p className="text-xs text-terminal-muted mb-1">&gt; best_bid:</p>
+                                    <p className="text-lg">
+                                        ${marketData?.best_bid_price.toFixed(2) || '---.--'}
+                                        <span className="text-terminal-muted ml-2">x{marketData?.best_bid_qty || 0}</span>
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-terminal-muted mb-1">&gt; best_ask:</p>
+                                    <p className="text-lg text-terminal-secondary">
+                                        ${marketData?.best_ask_price.toFixed(2) || '---.--'}
+                                        <span className="text-terminal-muted ml-2">x{marketData?.best_ask_qty || 0}</span>
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -254,7 +321,7 @@ function App() {
                 </div>
 
                 {/* Right Column: Trading Controls */}
-                <div className="space-y-8">
+                <div className="space-y-4 md:space-y-6">
                     <StockHolding symbol="TE" quantity={stockHoldings} cashBalance={cashBalance} />
                     <OrderEntry onPlaceOrder={handlePlaceOrder} />
                     <TradeHistory trades={trades} />

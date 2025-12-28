@@ -17,39 +17,68 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({ onPlaceOrder }) => {
   };
 
   return (
-    <div className="p-4 border rounded shadow-md bg-white">
-      <h2 className="text-xl font-bold mb-4">Place Order</h2>
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700">Price</label>
-        <input
-          type="number"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-2 border"
-        />
+    <div className="ascii-border bg-terminal-bg p-4">
+      <div className="text-sm mb-4 pb-2 border-b border-terminal-border">
+        +--- ORDER TERMINAL ---+
       </div>
+
+      {/* Price Input */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700">Quantity</label>
-        <input
-          type="number"
-          value={quantity}
-          onChange={(e) => setQuantity(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-2 border"
-        />
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs text-terminal-muted">&gt;</span>
+          <label className="text-xs text-terminal-muted uppercase tracking-wider">set_price:</label>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-terminal-primary">$</span>
+          <input
+            type="number"
+            step="0.01"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            className="flex-1 bg-transparent border-0 border-b border-terminal-border text-terminal-primary focus:outline-none focus:border-terminal-primary px-1 py-1 font-mono"
+          />
+          <span className="cursor-block"></span>
+        </div>
       </div>
-      <div className="flex space-x-4">
+
+      {/* Quantity Input */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs text-terminal-muted">&gt;</span>
+          <label className="text-xs text-terminal-muted uppercase tracking-wider">set_quantity:</label>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-terminal-primary">#</span>
+          <input
+            type="number"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            className="flex-1 bg-transparent border-0 border-b border-terminal-border text-terminal-primary focus:outline-none focus:border-terminal-primary px-1 py-1 font-mono"
+          />
+          <span className="cursor-block"></span>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="space-y-2">
         <button
           onClick={() => handleSubmit('buy')}
-          className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded"
+          className="w-full ascii-border text-terminal-primary hover:bg-terminal-primary hover:text-terminal-bg font-bold py-3 px-4 uppercase tracking-wider transition-all duration-150 active:translate-y-px"
         >
-          Buy
+          [ BUY --execute ]
         </button>
         <button
           onClick={() => handleSubmit('sell')}
-          className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded"
+          className="w-full ascii-border text-terminal-secondary hover:bg-terminal-secondary hover:text-terminal-bg font-bold py-3 px-4 uppercase tracking-wider transition-all duration-150 active:translate-y-px"
         >
-          Sell
+          [ SELL --execute ]
         </button>
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-terminal-border">
+        <p className="text-xs text-terminal-muted">
+          <span className="text-terminal-secondary">[TIP]</span> Orders execute at market price
+        </p>
       </div>
     </div>
   );

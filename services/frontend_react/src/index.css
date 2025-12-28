@@ -1,3 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-terminal-border;
+  }
+
+  body {
+    @apply bg-terminal-bg text-terminal-primary font-mono;
+    text-shadow: 0 0 5px rgba(51, 255, 0, 0.5);
+  }
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 5px rgba(51, 255, 0, 0.5);
+  }
+
+  .text-glow-amber {
+    text-shadow: 0 0 5px rgba(255, 176, 0, 0.5);
+  }
+
+  .text-glow-error {
+    text-shadow: 0 0 5px rgba(255, 51, 51, 0.5);
+  }
+
+  .cursor-block {
+    @apply inline-block w-2 h-5 bg-terminal-primary animate-blink;
+  }
+
+  .ascii-border {
+    border: 1px solid theme('colors.terminal.border');
+  }
+
+  .ascii-border-primary {
+    border: 1px solid theme('colors.terminal.primary');
+  }
+}
+
+/* CRT Scanline Overlay */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15),
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  z-index: 9999;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+  border: 1px solid #1f521f;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #33ff00;
+  border: 1px solid #1f521f;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2acc00;
+}
+
+
