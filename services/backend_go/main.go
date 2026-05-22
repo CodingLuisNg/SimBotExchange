@@ -104,9 +104,10 @@ func (wc *wsClient) startWriter() {
 func (wc *wsClient) stop() {
 	wc.stopOnce.Do(func() {
 		close(wc.done)
+		wc.wg.Wait()
+
+		wc.conn.Close()
 	})
-	wc.wg.Wait()
-	wc.conn.Close()
 }
 
 // OrderUpdateJSON is used for WebSocket JSON serialization with snake_case fields
@@ -277,6 +278,8 @@ func (s *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		select {
 		case wc.sendCh <- initial:
 		default:
+			// Buffer is full: drop the initial update but log for observability.
+			log.Printf("websocket: initial market update dropped because send buffer is full for client %v", c.RemoteAddr())
 		}
 	}
 
