@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +19,20 @@ import (
 
 	marketdata "github.com/CodingLuisNg/FakeTradingMarket/services/backend_go/proto/marketdata"
 	orderbook "github.com/CodingLuisNg/FakeTradingMarket/services/backend_go/proto/orderbook"
+)
+
+// Buffer and timeout constants for non-blocking broadcast.
+const (
+	subscriberBuffer = 10
+	clientSendBuffer = 16
+	writeTimeout     = 5 * time.Second
+	pingPeriod       = 30 * time.Second
+)
+
+// Atomic counters for dropped broadcast messages (observable without locking).
+var (
+	broadcastDroppedSubscribers uint64
+	broadcastDroppedClients     uint64
 )
 
 var (
@@ -32,14 +47,66 @@ var (
 type server struct {
 	marketdata.UnimplementedMarketDataServiceServer
 	mu sync.RWMutex
-	// We use a map of channels to broadcast updates to WebSocket clients
-	clients map[*websocket.Conn]bool
-	// We also support gRPC subscribers (bots)
+	// clients maps each active WebSocket connection to its wsClient wrapper.
+	// All sends go through the wsClient.sendCh — never directly on the conn.
+	clients map[*websocket.Conn]*wsClient
+	// subscribers holds per-bot buffered channels for gRPC market data streams.
 	subscribers  map[chan *marketdata.MarketUpdate]struct{}
 	lastUpdate   *marketdata.MarketUpdate
 	orderUpdates []*orderbook.OrderUpdate
 	// Track frontend orders (order_id -> true means it's a frontend order)
 	frontendOrders map[string]bool
+}
+
+// wsClient wraps a single WebSocket connection with a dedicated writer goroutine.
+// All writes to the connection MUST go through sendCh to avoid concurrent writes
+// and to prevent a slow client from holding any server-wide lock.
+type wsClient struct {
+	conn     *websocket.Conn
+	sendCh   chan interface{}
+	done     chan struct{}
+	stopOnce sync.Once
+	wg       sync.WaitGroup
+}
+
+// startWriter spawns a goroutine that drains sendCh and writes to the WebSocket.
+// It sends periodic pings and exits cleanly when done is closed or a write fails.
+func (wc *wsClient) startWriter() {
+	ticker := time.NewTicker(pingPeriod)
+	wc.wg.Add(1)
+	go func() {
+		defer wc.wg.Done()
+		defer ticker.Stop()
+		for {
+			select {
+			case msg, ok := <-wc.sendCh:
+				if !ok {
+					return
+				}
+				wc.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+				if err := wc.conn.WriteJSON(msg); err != nil {
+					return
+				}
+			case <-ticker.C:
+				wc.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+				if err := wc.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
+				}
+			case <-wc.done:
+				return
+			}
+		}
+	}()
+}
+
+// stop signals the writer goroutine to exit, waits for it to finish, then closes
+// the underlying connection. Safe to call multiple times.
+func (wc *wsClient) stop() {
+	wc.stopOnce.Do(func() {
+		close(wc.done)
+	})
+	wc.wg.Wait()
+	wc.conn.Close()
 }
 
 // OrderUpdateJSON is used for WebSocket JSON serialization with snake_case fields
@@ -54,7 +121,7 @@ type OrderUpdateJSON struct {
 
 func newServer() *server {
 	return &server{
-		clients:        make(map[*websocket.Conn]bool),
+		clients:        make(map[*websocket.Conn]*wsClient),
 		subscribers:    make(map[chan *marketdata.MarketUpdate]struct{}),
 		frontendOrders: make(map[string]bool),
 	}
@@ -74,11 +141,15 @@ func (s *server) Subscribe(req *marketdata.SubscribeRequest, stream marketdata.M
 	}
 	s.mu.Unlock()
 
+	// INVARIANT: ch must be deleted AND closed while holding s.mu.
+	// Broadcast snapshots s.subscribers under s.mu, so once this defer removes
+	// and closes ch under the lock, no future Broadcast snapshot will include it,
+	// preventing send-on-closed-channel panics.
 	defer func() {
 		s.mu.Lock()
 		delete(s.subscribers, ch)
-		s.mu.Unlock()
 		close(ch)
+		s.mu.Unlock()
 	}()
 
 	for update := range ch {
@@ -89,44 +160,44 @@ func (s *server) Subscribe(req *marketdata.SubscribeRequest, stream marketdata.M
 	return nil
 }
 
+// Broadcast fans out an update to all gRPC subscribers and WebSocket clients.
+//
+// Safety: state mutations and recipient snapshots happen under s.mu.
+// All network I/O (channel sends, WriteJSON) happens AFTER releasing the lock
+// so that no slow client can stall the broadcast path or any other lock holder.
 func (s *server) Broadcast(update interface{}) {
+	// --- Critical section: mutate state and snapshot recipients ---
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
-	// Update state
+	var (
+		marketMsg *marketdata.MarketUpdate
+		wsMsg     interface{}
+		subs      []chan *marketdata.MarketUpdate
+		wsClients []*wsClient
+	)
+
 	if mu, ok := update.(*marketdata.MarketUpdate); ok {
 		s.lastUpdate = mu
-
-		// Broadcast to gRPC subscribers
+		marketMsg = mu
+		wsMsg = mu
+		// Snapshot both subscriber channels and WS client send queues.
+		subs = make([]chan *marketdata.MarketUpdate, 0, len(s.subscribers))
 		for ch := range s.subscribers {
-			select {
-			case ch <- mu:
-			default:
-				// Skip if channel is full
-			}
+			subs = append(subs, ch)
 		}
-
-		// Broadcast market updates to all WebSocket clients
-		for client := range s.clients {
-			err := client.WriteJSON(update)
-			if err != nil {
-				log.Printf("Websocket error: %v", err)
-				client.Close()
-				delete(s.clients, client)
-			}
+		wsClients = make([]*wsClient, 0, len(s.clients))
+		for _, wc := range s.clients {
+			wsClients = append(wsClients, wc)
 		}
 	} else if ou, ok := update.(*orderbook.OrderUpdate); ok {
 		s.orderUpdates = append(s.orderUpdates, ou)
 		if len(s.orderUpdates) > 100 { // Keep last 100
 			s.orderUpdates = s.orderUpdates[1:]
 		}
-
-		// Only send order updates to WebSocket if it's a frontend order
+		// Only notify WebSocket clients if this is a tracked frontend order.
 		if s.frontendOrders[ou.OrderId] {
 			log.Printf("📢 Sending fill notification to frontend: OrderID=%s Status=%s", ou.OrderId, ou.Status)
-
-			// Convert to JSON struct with snake_case fields for frontend
-			orderJSON := OrderUpdateJSON{
+			wsMsg = OrderUpdateJSON{
 				OrderID:   ou.OrderId,
 				Symbol:    ou.Symbol,
 				Price:     ou.Price,
@@ -134,18 +205,41 @@ func (s *server) Broadcast(update interface{}) {
 				Status:    ou.Status,
 				Timestamp: ou.Timestamp,
 			}
-
-			for client := range s.clients {
-				err := client.WriteJSON(orderJSON)
-				if err != nil {
-					log.Printf("Websocket error: %v", err)
-					client.Close()
-					delete(s.clients, client)
-				}
+			wsClients = make([]*wsClient, 0, len(s.clients))
+			for _, wc := range s.clients {
+				wsClients = append(wsClients, wc)
 			}
-			// Clean up filled orders from tracking
 			if ou.Status == "FILLED" {
 				delete(s.frontendOrders, ou.OrderId)
+			}
+		}
+	}
+
+	s.mu.Unlock()
+	// --- End critical section: all I/O below is lock-free ---
+
+	// Non-blocking send to gRPC bot subscribers.
+	// Drops are counted atomically and logged; bots will receive the next update.
+	for _, ch := range subs {
+		select {
+		case ch <- marketMsg:
+		default:
+			atomic.AddUint64(&broadcastDroppedSubscribers, 1)
+			log.Printf("Subscriber channel full, dropping market update (total dropped: %d)",
+				atomic.LoadUint64(&broadcastDroppedSubscribers))
+		}
+	}
+
+	// Non-blocking send to WebSocket clients via their per-connection send queues.
+	// A full queue means the client is too slow; we drop and count rather than block.
+	if wsMsg != nil {
+		for _, wc := range wsClients {
+			select {
+			case wc.sendCh <- wsMsg:
+			default:
+				atomic.AddUint64(&broadcastDroppedClients, 1)
+				log.Printf("WebSocket send queue full, dropping update (total dropped: %d)",
+					atomic.LoadUint64(&broadcastDroppedClients))
 			}
 		}
 	}
@@ -157,23 +251,54 @@ func (s *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		log.Print("upgrade:", err)
 		return
 	}
-	defer c.Close()
 
+	// Create per-connection writer. All writes go through sendCh so this
+	// goroutine is the sole writer on the connection (gorilla/websocket requires
+	// single concurrent writer).
+	wc := &wsClient{
+		conn:   c,
+		sendCh: make(chan interface{}, clientSendBuffer),
+		done:   make(chan struct{}),
+	}
+	wc.startWriter()
+
+	// Register client and capture current market snapshot under lock.
+	// Do NOT write to the socket here — that would be I/O under the lock.
 	s.mu.Lock()
-	s.clients[c] = true
-	// Send initial state
+	s.clients[c] = wc
+	var initial *marketdata.MarketUpdate
 	if s.lastUpdate != nil {
-		c.WriteJSON(s.lastUpdate)
+		initial = s.lastUpdate
 	}
 	s.mu.Unlock()
 
+	// Send initial state non-blocking through the writer goroutine (no lock held).
+	if initial != nil {
+		select {
+		case wc.sendCh <- initial:
+		default:
+		}
+	}
+
+	// Configure read-side: small read limit (we only read control frames),
+	// read deadline extended on each pong so we detect dead connections.
+	c.SetReadLimit(512)
+	c.SetReadDeadline(time.Now().Add(pingPeriod * 2))
+	c.SetPongHandler(func(string) error {
+		c.SetReadDeadline(time.Now().Add(pingPeriod * 2))
+		return nil
+	})
+
+	// Read loop: purpose is solely to detect client disconnection.
+	// On any read error the client is removed from the registry and the
+	// writer goroutine is stopped cleanly.
 	for {
-		_, _, err := c.ReadMessage()
-		if err != nil {
+		if _, _, err := c.ReadMessage(); err != nil {
 			s.mu.Lock()
 			delete(s.clients, c)
 			s.mu.Unlock()
-			break
+			wc.stop() // signal writer, wait for it, then close conn
+			return
 		}
 	}
 }
