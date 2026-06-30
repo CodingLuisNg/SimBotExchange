@@ -1,10 +1,10 @@
-# 🏦 SimBot Exchange
+# SimBot Exchange
 
 A real-time stock market simulator with a matching engine, trading bots, and a web-based trading interface.
 
 ![Screenshot1.png](resources/Screenshot1.png)
 
-## 🚀 Quick Start (Docker)
+## Quick Start (Docker)
 
 **Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
 
@@ -19,7 +19,7 @@ chmod +x start_docker.sh && ./start_docker.sh
 
 That's it! Open **http://localhost:3000** in your browser to start trading.
 
-## 📊 What's Running
+## What's Running
 
 | Service | Description | Port |
 |---------|-------------|------|
@@ -32,7 +32,7 @@ That's it! Open **http://localhost:3000** in your browser to start trading.
 
 ![Screenshot2.png](resources/Screenshot2.png)
 
-## 🎮 How to Play
+## How to Play
 
 1. **Open the app** at http://localhost:3000
 2. **You start with $1,000** cash and 0 shares
@@ -46,11 +46,11 @@ That's it! Open **http://localhost:3000** in your browser to start trading.
 - Orders that don't match immediately stay in the order book
 
 ### Trading Tips
-- 📈 Watch the price chart for trends
-- 📊 Look at the order book to see supply/demand
-- 🤖 The bots create market volatility - use it to your advantage!
+- Watch the price chart for trends
+- Look at the order book to see supply/demand
+- The bots create market volatility - use it to your advantage!
 
-## 🛑 Stop the App
+## Stop the App
 
 ```bash
 ./stop_docker.sh
@@ -61,7 +61,7 @@ Or manually:
 cd docker && docker-compose down
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 **Technologies between components**
 - **Frontend → Backend**
@@ -93,7 +93,7 @@ cd docker && docker-compose down
                                                └─────────────────┘
 ```
 
-## 🤖 Bot Types
+## Bot Types
 
 | Bot | Strategy | Behavior |
 |-----|----------|----------|
@@ -101,7 +101,7 @@ cd docker && docker-compose down
 | **Market Maker** | Spread | Places both buy and sell orders. Provides liquidity. |
 | **Trend Creator** | Momentum | Picks a direction and pushes the market. Creates trends. |
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ├── services/
@@ -119,4 +119,4 @@ cd docker && docker-compose down
 
 ---
 
-**Happy Trading! 📈💰📉**
+**Happy Trading!**
