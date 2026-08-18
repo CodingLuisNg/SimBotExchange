@@ -10,7 +10,7 @@ A real-time stock market simulator with a matching engine, trading bots, and a w
 
 ```bash
 # Clone the repository
-git clone https://github.com/codingluisng/simbot-exchange.git
+git clone https://github.com/mud-3/simbot-exchange.git
 cd simbot-exchange
 
 # Start everything with 1 line of command
